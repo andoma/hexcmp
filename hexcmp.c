@@ -8,16 +8,22 @@
 
 
 static void
-print_diff(const uint8_t *a, const uint8_t *b, int len, uint32_t offset)
+print_diff(const uint8_t *a, const uint8_t *b, int len, uint32_t offset,
+           int show_all_bytes)
 {
   uint8_t diff[len];
-  printf("%08x  ", offset);
 
   int any_diff = 0;
   for(int i = 0; i < len; i++) {
     diff[i] = a[i] != b[i];
     any_diff |= diff[i];
   }
+
+  if(!any_diff && !show_all_bytes)
+    return;
+
+  printf("%08x  ", offset);
+
 
   for(int i = 0; i < len; i++) {
     if(i == 8)
@@ -68,29 +74,42 @@ print_diff(const uint8_t *a, const uint8_t *b, int len, uint32_t offset)
 int
 main(int argc, char **argv)
 {
-  uint8_t b1[1024];
-  uint8_t b2[1024];
+  int opt;
+  int show_all_bytes = 0;
+  while ((opt = getopt(argc, argv, "a")) != -1) {
+    switch(opt) {
+    case 'a':
+      show_all_bytes = 1;
+      break;
+    }
+  }
 
-  if(argc != 3) {
-    fprintf(stderr, "Usage: %s FILE1 FILE2\n",
+  if(argc != optind + 2) {
+    fprintf(stderr, "Usage: %s [OPTS] FILE1 FILE2\n",
             argv[0]);
     exit(1);
   }
 
-  int fd1 = open(argv[1], O_RDONLY);
+  const char *path1 = argv[optind];
+  const char *path2 = argv[optind + 1];
+
+  int fd1 = open(path1, O_RDONLY);
   if(fd1 == -1) {
-    fprintf(stderr, "Unable to open %s -- %m\n", argv[1]);
+    fprintf(stderr, "Unable to open %s -- %m\n", path1);
     exit(1);
   }
-  int fd2 = open(argv[2], O_RDONLY);
+  int fd2 = open(path2, O_RDONLY);
   if(fd2 == -1) {
-    fprintf(stderr, "Unable to open %s -- %m\n", argv[2]);
+    fprintf(stderr, "Unable to open %s -- %m\n", path2);
     exit(1);
   }
 
   uint32_t offset = 0;
 
   while(1) {
+
+    uint8_t b1[1024];
+    uint8_t b2[1024];
 
     int r1 = read(fd1, b1, sizeof(b1));
     if(r1 < 0) {
@@ -111,7 +130,7 @@ main(int argc, char **argv)
 
     for(int i = 0; i < r; i += 16) {
       int csize = MIN(r - i, 16);
-      print_diff(b1 + i, b2 + i, csize, offset + i);
+      print_diff(b1 + i, b2 + i, csize, offset + i, show_all_bytes);
     }
     offset += sizeof(b1);
   }
